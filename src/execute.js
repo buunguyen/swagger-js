@@ -1,9 +1,10 @@
 import assign from 'lodash/assign'
 import getIn from 'lodash/get'
+import isPlainObject from 'lodash/isPlainObject'
 import btoa from 'btoa'
 import url from 'url'
 import http, {mergeInQueryOrForm} from './http'
-import {getOperationRaw, idFromPathMethod} from './helpers'
+import {getOperationRaw, idFromPathMethod, legacyIdFromPathMethod} from './helpers'
 
 const arrayOrEmpty = (ar) => {
   return Array.isArray(ar) ? ar : []
@@ -40,12 +41,15 @@ export function execute({
   // Provide default fetch implementation
   userHttp = userHttp || fetch || http // Default to _our_ http
 
-  // Prefer pathName/method if it exists
-  if (pathName && method) {
-    operationId = idFromPathMethod(pathName, method)
+  if (pathName && method && !operationId) {
+    operationId = legacyIdFromPathMethod(pathName, method)
   }
 
   const request = self.buildRequest({spec, operationId, parameters, securities, ...extras})
+
+  if (request.body && isPlainObject(request.body)) {
+    request.body = JSON.stringify(request.body)
+  }
 
   // Build request and execute it
   return userHttp(request)
@@ -121,8 +125,6 @@ export function buildRequest({
 
   // Add securities, which are applicable
   req = applySecurities({request: req, securities, operation, spec})
-  // Will add the query object into the URL, if it exists
-  mergeInQueryOrForm(req)
 
   if (req.body || req.form) {
     if (requestContentType) {
@@ -137,6 +139,11 @@ export function buildRequest({
       req.headers['content-type'] = "application/x-www-form-urlencoded"
     }
   }
+
+  // Will add the query object into the URL, if it exists
+  // ... will also create a FormData instance, if multipart/form-data (eg: a file)
+  mergeInQueryOrForm(req)
+
   return req
 }
 

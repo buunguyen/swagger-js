@@ -52,6 +52,38 @@ describe('constructor', () => {
       })
     })
 
+    it('should resolve a cyclic spec when baseDoc is specified', function (cb) {
+      const spec = {
+        paths: {
+          post: {
+            parameters: [
+              {
+                $ref: '#/definitions/list',
+              }
+            ]
+          }
+        },
+        definitions: {
+          item: {
+            items: {
+              $ref: '#/definitions/item'
+            }
+          },
+          list: {
+            items: {
+              $ref: '#/definitions/item'
+            }
+          }
+        }
+      }
+
+      Swagger.resolve({spec, baseDoc: 'http://whatever/'}).then((swag) => {
+        expect(swag.errors).toEqual([])
+        cb()
+      })
+    })
+
+
     it('should keep resolve errors in #errors', function () {
       // Given
       const spec = {
@@ -90,6 +122,43 @@ describe('constructor', () => {
         expect(apis).toBeAn('object')
         expect(apis.me.getMe).toBeA(Function)
       })
+    })
+
+    it('should handle circular $refs when a baseDoc is provided', () => {
+      // Given
+      const spec = {
+        swagger: '2.0',
+        definitions: {
+          node: {
+            required: ['id', 'nodes'],
+            type: 'object',
+            properties: {
+              id: {
+                type: 'string'
+              },
+              nodes: {
+                type: 'array',
+                items: {
+                  $ref: '#/definitions/node'
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // When
+      return Swagger.resolve({
+        spec,
+        allowMetaPatches: false,
+        baseDoc: 'http://example.com/swagger.json'
+      }).then(handleResponse)
+
+      // Then
+      function handleResponse(obj) {
+        expect(obj.errors).toEqual([])
+        expect(obj.spec).toEqual(spec)
+      }
     })
   })
 
